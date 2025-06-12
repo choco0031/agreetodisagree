@@ -77,6 +77,12 @@ app.post('/api/lobby/join', (req, res) => {
         return res.status(404).json({ error: 'Lobby not found' });
     }
     
+    // ADD THIS CHECK - Prevent joining if game is active
+    const gameState = gameStates.get(code);
+    if (gameState && gameState.phase !== 'waiting') {
+        return res.status(400).json({ error: 'Cannot join - game is already in progress' });
+    }
+    
     // Check if username already exists
     if (lobby.participants.some(p => p.username === username)) {
         return res.status(400).json({ error: 'Username already taken in this lobby' });
@@ -338,19 +344,18 @@ function startSoloPhase(code) {
     if (!gameState || !lobby) return;
     
     gameState.phase = 'solo';
-    gameState.timer = 120; // 2 minutes
+    gameState.timer = 60; // 1 minute (your change)
     
-    // Select random speaker who hasn't spoken yet
-    const availableSpeakers = lobby.participants
-        .map(p => p.username)
-        .filter(username => !gameState.usedSpeakers.includes(username));
+    // CHANGE THIS PART - Only select from players who were present at game start
+    const gameStartParticipants = Object.keys(gameState.scores); // Players who have scores = were present at start
+    const availableSpeakers = gameStartParticipants.filter(username => !gameState.usedSpeakers.includes(username));
     
     if (availableSpeakers.length === 0) {
-        // Reset speakers if all have spoken
+        // Reset speakers if all have spoken (only from original players)
         gameState.usedSpeakers = [];
     }
     
-    const speakers = availableSpeakers.length > 0 ? availableSpeakers : lobby.participants.map(p => p.username);
+    const speakers = availableSpeakers.length > 0 ? availableSpeakers : gameStartParticipants;
     const selectedSpeaker = speakers[Math.floor(Math.random() * speakers.length)];
     gameState.usedSpeakers.push(selectedSpeaker);
     
@@ -367,7 +372,7 @@ function startSoloPhase(code) {
         position: speakerVote
     });
     
-    startTimer(code, 120, () => {
+    startTimer(code, 60, () => {
         startDiscussionPhase(code);
     });
 }
