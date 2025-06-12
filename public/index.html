@@ -1211,6 +1211,7 @@
         // Game phase management
         function updateGamePhase(data) {
             hideAllGameSections();
+            // Topic stays visible - don't hide it
             
             switch(data.phase) {
                 case 'voting':
@@ -1242,7 +1243,7 @@
 
         function hideAllGameSections() {
             const sections = [
-                'topicContainer', 'timerContainer', 'votingInterface', 'voteResults',
+                'timerContainer', 'votingInterface', 'voteResults',
                 'soloOpinionStage', 'groupDiscussion', 'revoteInterface', 'finalResults',
                 'scoreboard', 'waitingForNext', 'gameEndScreen'
             ];
@@ -1315,6 +1316,7 @@
         function displayTopic(topic) {
             document.getElementById('currentTopic').textContent = topic;
             document.getElementById('topicContainer').classList.remove('hidden');
+            // Topic container will now stay visible throughout the entire round
         }
 
         // Timer management
