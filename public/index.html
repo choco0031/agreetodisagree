@@ -105,6 +105,63 @@
         .instructions-btn:hover {
             background: #138496;
         }
+        
+        .credits-btn {
+        background: #6f42c1;
+        margin-top: 10px;
+        }
+
+        .credits-btn:hover {
+            background: #5a359a;
+        }
+
+        .social-links {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .social-link {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            background: linear-gradient(45deg, #f8f9fa, #ffffff);
+            border-radius: 10px;
+            text-decoration: none;
+            color: #333;
+            transition: all 0.3s ease;
+            border: 2px solid #e9ecef;
+        }
+
+        .social-link:hover {
+            transform: translateX(5px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            border-color: #667eea;
+        }
+
+        .social-icon {
+            font-size: 24px;
+            margin-right: 15px;
+            width: 30px;
+            text-align: center;
+        }
+
+        .social-info {
+            flex: 1;
+        }
+
+        .social-name {
+            font-weight: bold;
+            font-size: 16px;
+            color: #333;
+        }
+
+        .social-handle {
+            font-size: 14px;
+            color: #666;
+            margin-top: 2px;
+        }
 
         .lobby-code {
             background: linear-gradient(45deg, #f8f9fa, #e9ecef);
@@ -669,6 +726,68 @@
             margin-left: 10px;
         }
 
+        .social-links {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .social-link {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            background: linear-gradient(45deg, #f8f9fa, #ffffff);
+            border-radius: 10px;
+            text-decoration: none;
+            color: #333;
+            transition: all 0.3s ease;
+            border: 2px solid #e9ecef;
+        }
+
+        .social-link:hover {
+            transform: translateX(5px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            border-color: #667eea;
+        }
+
+        .profile-pic {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            margin-right: 15px;
+            object-fit: cover;
+            border: 2px solid #667eea;
+            transition: all 0.3s ease;
+        }
+
+        .social-link:hover .profile-pic {
+            border-color: #764ba2;
+            transform: scale(1.05);
+        }
+
+        .social-info {
+            flex: 1;
+        }
+
+        .social-name {
+            font-weight: bold;
+            font-size: 16px;
+            color: #333;
+        }
+
+        .social-handle {
+            font-size: 14px;
+            color: #666;
+            margin-top: 2px;
+        }
+
+        .social-platform {
+            font-size: 12px;
+            color: #999;
+            margin-top: 2px;
+        }
+
         /* Responsive Design */
         @media (max-width: 768px) {
             .container {
@@ -722,6 +841,7 @@
         </div>
 
         <button class="btn instructions-btn" onclick="showInstructions()">📖 Instructions</button>
+        <button class="btn credits-btn" onclick="showCredits()">👥 Credits</button>
     </div>
 
     <!-- Lobby Page -->
@@ -857,7 +977,7 @@
         <div class="modal-content">
             <span class="close" onclick="closeInstructions()">&times;</span>
             <div class="instructions-content">
-                <h2>🎮 Debate Game Instructions</h2>
+                <h2>🎮 Game Instructions</h2>
                 
                 <h3>📋 How to Get Started</h3>
                 <ul>
@@ -890,6 +1010,50 @@
                     <li><strong>Fair Rotation:</strong> Everyone gets a chance to be the solo speaker</li>
                     <li><strong>Time Limits:</strong> All phases have strict time limits</li>
                 </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Credits Modal -->
+    <div id="creditsModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeCredits()">&times;</span>
+            <div class="instructions-content">
+                <h2>👥 Credits</h2>
+                <p>This game was created by an amazing team:</p>
+                
+                <div class="social-links">
+                    <a href="https://x.com/ChocoXXXI" target="_blank" class="social-link">
+                        <img src="images/choco.png" alt="Person 1" class="profile-pic">
+                        <div class="social-info">
+                            <div class="social-name">ChocoBear</div>
+                            <div class="social-handle">@ChocoXXXI</div>
+                            <div class="social-platform">Dev</div>
+                        </div>
+                    </a>
+                    
+                    <a href="https://x.com/DoritoDong" target="_blank" class="social-link">
+                        <img src="images/dorito.png" alt="Person 2" class="profile-pic">
+                        <div class="social-info">
+                            <div class="social-name">DoritoDong</div>
+                            <div class="social-handle">@DoritoDong</div>
+                            <div class="social-platform">Co-Host</div>
+                        </div>
+                    </a>
+                    
+                    <a href="https://x.com/Mido_269" target="_blank" class="social-link">
+                        <img src="images/mido.png" alt="Person 3" class="profile-pic">
+                        <div class="social-info">
+                            <div class="social-name">Midodo</div>
+                            <div class="social-handle">@Mido_269</div>
+                            <div class="social-platform">Artist</div>
+                        </div>
+                    </a>
+                </div>
+                
+                <p style="text-align: center; margin-top: 20px; color: #666;">
+                    Thanks for playing Agree To Disagree! 🎮
+                </p>
             </div>
         </div>
     </div>
@@ -1586,11 +1750,25 @@
             document.getElementById('instructionsModal').style.display = 'none';
         }
 
-        // Close modal when clicking outside
+        // Credits modal functions
+        function showCredits() {
+            document.getElementById('creditsModal').style.display = 'block';
+        }
+
+        function closeCredits() {
+            document.getElementById('creditsModal').style.display = 'none';
+        }
+
+        // Window.onclick function to handle both modals:
         window.onclick = function(event) {
-            const modal = document.getElementById('instructionsModal');
-            if (event.target === modal) {
-                modal.style.display = 'none';
+            const instructionsModal = document.getElementById('instructionsModal');
+            const creditsModal = document.getElementById('creditsModal');
+            
+            if (event.target === instructionsModal) {
+                instructionsModal.style.display = 'none';
+            }
+            if (event.target === creditsModal) {
+                creditsModal.style.display = 'none';
             }
         }
 
