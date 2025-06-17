@@ -383,11 +383,11 @@ function startDiscussionPhase(code) {
     if (!gameState) return;
     
     gameState.phase = 'discussion';
-    gameState.timer = 180; // 3 minutes
+    gameState.timer = 300; // 3 minutes
     
     io.to(code).emit('game-phase-update', { phase: 'discussion' });
     
-    startTimer(code, 180, () => {
+    startTimer(code, 300, () => {
         startRevotingPhase(code);
     });
 }
