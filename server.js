@@ -462,6 +462,30 @@ function processVoteResults(code) {
     
     gameState.initialVoteResults = { ...voteResults };
     
+    // Check if either agree OR disagree has 0 votes
+    if (voteResults.agree === 0 || voteResults.disagree === 0) {
+        // Skip the round immediately
+        gameState.phase = 'round-skipped';
+        
+        io.to(code).emit('game-phase-update', { phase: 'vote-results' });
+        io.to(code).emit('vote-results', voteResults);
+        
+        setTimeout(() => {
+            io.to(code).emit('game-phase-update', { phase: 'round-skipped' });
+            io.to(code).emit('round-skipped', {
+                message: 'Round skipped - everyone voted the same way!',
+                initialVotes: voteResults,
+                finalVotes: null
+            });
+            
+            setTimeout(() => {
+                showScoreboard(code);
+            }, 5000);
+        }, 3000); // Show vote results for 3 seconds before showing skip message
+        
+        return;
+    }
+    
     gameState.phase = 'vote-results';
     io.to(code).emit('game-phase-update', { phase: 'vote-results' });
     io.to(code).emit('vote-results', voteResults);
@@ -572,26 +596,6 @@ function calculateResults(code) {
     });
     
     gameState.finalVoteResults = { ...finalVoteResults };
-    
-    // Check if either agree OR disagree has 0 votes
-    if (finalVoteResults.agree === 0 || finalVoteResults.disagree === 0) {
-        // Skip the round - no points awarded, no penalties
-        gameState.phase = 'round-skipped';
-        
-        io.to(code).emit('game-phase-update', { phase: 'round-skipped' });
-        io.to(code).emit('round-skipped', {
-            message: 'Round skipped - unanimous decision!',
-            initialVotes: gameState.initialVoteResults,
-            finalVotes: finalVoteResults
-        });
-        
-        // No penalties for not voting in a skipped round
-        
-        setTimeout(() => {
-            showScoreboard(code);
-        }, 5000);
-        return;
-    }
     
     // Calculate vote changes
     const agreeChange = finalVoteResults.agree - gameState.initialVoteResults.agree;
