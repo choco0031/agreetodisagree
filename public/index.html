@@ -60,6 +60,12 @@
             box-shadow: 0 4px 15px rgba(0,0,0,0.2);
             position: relative;
             overflow: hidden;
+            min-height: 44px;
+            touch-action: manipulation;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
         }
 
         .btn:hover {
@@ -86,7 +92,7 @@
             padding: 12px;
             border: 2px solid #ddd;
             border-radius: 8px;
-            font-size: 16px;
+            font-size: 16px !important;
             width: 100%;
             margin-bottom: 10px;
             transition: all 0.3s ease;
@@ -240,6 +246,11 @@
         .participant.host {
             border-left-color: #ffc107;
             background: linear-gradient(45deg, #fff8e1, #ffffff);
+        }
+
+        .participant.disconnected {
+            opacity: 0.5;
+            border-left-color: #dc3545 !important;
         }
 
         @keyframes fadeInUp {
@@ -727,31 +738,6 @@
             margin-left: 10px;
         }
 
-        .social-links {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            margin: 20px 0;
-        }
-
-        .social-link {
-            display: flex;
-            align-items: center;
-            padding: 15px;
-            background: linear-gradient(45deg, #f8f9fa, #ffffff);
-            border-radius: 10px;
-            text-decoration: none;
-            color: #333;
-            transition: all 0.3s ease;
-            border: 2px solid #e9ecef;
-        }
-
-        .social-link:hover {
-            transform: translateX(5px);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            border-color: #667eea;
-        }
-
         .profile-pic {
             width: 50px;
             height: 50px;
@@ -765,22 +751,6 @@
         .social-link:hover .profile-pic {
             border-color: #764ba2;
             transform: scale(1.05);
-        }
-
-        .social-info {
-            flex: 1;
-        }
-
-        .social-name {
-            font-weight: bold;
-            font-size: 16px;
-            color: #333;
-        }
-
-        .social-handle {
-            font-size: 14px;
-            color: #666;
-            margin-top: 2px;
         }
 
         .social-platform {
@@ -985,14 +955,14 @@
                     <li><strong>Enter Username:</strong> Type your username (at least 2 characters)</li>
                     <li><strong>Create Lobby:</strong> Click "Create Lobby" to start a new game room</li>
                     <li><strong>Join Lobby:</strong> Enter a 6-character lobby code to join an existing game</li>
-                    <li><strong>Minimum Players:</strong> You need at least 2 players to start the game</li>
+                    <li><strong>Join Anytime:</strong> Players can join at any point during the game!</li>
                 </ul>
 
                 <h3>🎯 Game Flow</h3>
                 <ul>
                     <li><strong>1. Topic Selection:</strong> A controversial topic is randomly chosen</li>
                     <li><strong>2. Initial Vote (20s):</strong> Everyone votes Agree/Disagree/No Opinion</li>
-                    <li><strong>3. Solo Opinion (2min):</strong> One random player shares their perspective</li>
+                    <li><strong>3. Solo Opinion (1min):</strong> One random player shares their perspective</li>
                     <li><strong>4. Group Discussion (3min):</strong> Open discussion for all players</li>
                     <li><strong>5. Final Vote (20s):</strong> Everyone votes again after discussion</li>
                     <li><strong>6. Scoring:</strong> Points awarded based on vote changes</li>
@@ -1002,6 +972,7 @@
                 <ul>
                     <li><strong>Winning Team:</strong> The side (Agree/Disagree) that gains the most votes gets +3 points each</li>
                     <li><strong>No Vote Penalty:</strong> Players who don't vote in the final round lose 1 point</li>
+                    <li><strong>Late Joiners:</strong> Start with 0 points but can participate immediately</li>
                     <li><strong>Multiple Rounds:</strong> Game continues until all topics are used</li>
                 </ul>
 
@@ -1010,6 +981,7 @@
                     <li><strong>No Repeats:</strong> Topics and solo speakers are never repeated</li>
                     <li><strong>Fair Rotation:</strong> Everyone gets a chance to be the solo speaker</li>
                     <li><strong>Time Limits:</strong> All phases have strict time limits</li>
+                    <li><strong>Mobile Friendly:</strong> Game works seamlessly on mobile devices</li>
                 </ul>
             </div>
         </div>
@@ -1063,8 +1035,15 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.8.1/socket.io.js"></script>
     
     <script>
-        // Socket.IO connection
-        const socket = io();
+        // Socket.IO connection with mobile-friendly settings
+        const socket = io({
+            transports: ['websocket', 'polling'],
+            reconnection: true,
+            reconnectionAttempts: Infinity,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            timeout: 20000
+        });
         
         // Game state
         let currentLobby = null;
@@ -1072,6 +1051,30 @@
         let currentUsername = '';
         let gameState = null;
         let timerInterval = null;
+
+        // Add visibility change detection for mobile
+        let isPageHidden = false;
+        let needsSync = false;
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                isPageHidden = true;
+            } else {
+                isPageHidden = false;
+                if (needsSync && currentLobby) {
+                    // Request sync when returning to the app
+                    socket.emit('request-sync', { code: currentLobby.code });
+                    needsSync = false;
+                }
+            }
+        });
+
+        // Keep connection alive on mobile
+        setInterval(() => {
+            if (!document.hidden && socket.connected) {
+                socket.emit('ping');
+            }
+        }, 30000);
 
         // UI Elements
         const connectionStatus = document.getElementById('connectionStatus');
@@ -1086,12 +1089,20 @@
             console.log('Connected to server');
             updateConnectionStatus('connected');
             checkInputs();
+            
+            // If we were in a game, request sync
+            if (currentLobby && gameState) {
+                socket.emit('join-lobby', { code: currentLobby.code, username: currentUsername });
+                setTimeout(() => {
+                    socket.emit('request-sync', { code: currentLobby.code });
+                }, 500);
+            }
         });
 
         socket.on('disconnect', () => {
             console.log('Disconnected from server');
             updateConnectionStatus('disconnected');
-            showError('Connection lost. Please refresh the page.');
+            needsSync = true;
         });
 
         socket.on('lobby-updated', (lobby) => {
@@ -1152,6 +1163,77 @@
             setTimeout(() => {
                 leaveLobby();
             }, 2000);
+        });
+
+        // Add sync game state handler
+        socket.on('sync-game-state', (data) => {
+            console.log('Syncing game state:', data);
+            
+            currentLobby = data.lobby;
+            gameState = data.gameState;
+            
+            // Update UI based on synced state
+            showGamePage();
+            
+            // Show topic if available
+            if (data.gameState.currentTopic) {
+                displayTopic(data.gameState.currentTopic);
+            }
+            
+            // Update phase
+            updateGamePhase({
+                phase: data.gameState.phase,
+                roundNumber: data.gameState.roundNumber,
+                speaker: data.gameState.currentSpeaker
+            });
+            
+            // Show current timer
+            if (data.gameState.timer > 0) {
+                updateTimer(data.gameState.timer);
+            }
+            
+            // Show vote results if available
+            if (data.gameState.phase === 'vote-results' && data.gameState.initialVoteResults) {
+                displayVoteResults(data.gameState.initialVoteResults);
+            }
+            
+            // Show speaker info if in solo phase
+            if (data.gameState.phase === 'solo' && data.gameState.currentSpeaker) {
+                displaySpeaker({
+                    speaker: data.gameState.currentSpeaker,
+                    position: data.gameState.speakerPosition
+                });
+            }
+            
+            // Show user's votes if they've voted
+            if (data.userVote) {
+                showYourVote(data.userVote, 'yourVote');
+                disableVoteButtons();
+            }
+            
+            if (data.userRevote) {
+                showYourVote(data.userRevote, 'yourRevote');
+                disableRevoteButtons();
+            }
+            
+            // Update scores
+            if (data.gameState.scores) {
+                displayScoreboard(data.gameState.scores);
+            }
+            
+            showSuccess('Synced with game!');
+        });
+
+        // Add handler for late join welcome
+        socket.on('late-join-welcome', (data) => {
+            showSuccess(`Welcome! You've joined during Round ${data.roundNumber}. Current topic: "${data.currentTopic}"`);
+            
+            // If joining during a voting phase, enable voting immediately
+            if (data.currentPhase === 'voting') {
+                enableVoteButtons();
+            } else if (data.currentPhase === 'revoting') {
+                enableRevoteButtons();
+            }
         });
 
         // Connection status management
@@ -1306,8 +1388,20 @@
                     // Join the socket room
                     socket.emit('join-lobby', { code, username });
                     
+                    if (data.reconnection) {
+                        showSuccess(`Reconnected to lobby ${code}!`);
+                    } else {
+                        showSuccess(`Joined lobby ${code} successfully!`);
+                    }
+                    
                     showLobbyPage();
-                    showSuccess(`Joined lobby ${code} successfully!`);
+                    
+                    // Request sync if game is in progress
+                    if (currentLobby.gameStarted) {
+                        setTimeout(() => {
+                            socket.emit('request-sync', { code });
+                        }, 1000);
+                    }
                 } else {
                     showError(data.error || 'Failed to join lobby');
                 }
@@ -1346,7 +1440,10 @@
             
             document.getElementById('lobbyCodeDisplay').textContent = currentLobby.code;
             document.getElementById('currentUsername').textContent = currentUsername;
-            document.getElementById('participantCount').textContent = currentLobby.participants.length;
+            
+            // Count connected participants
+            const connectedCount = currentLobby.participants.filter(p => p.connected !== false).length;
+            document.getElementById('participantCount').textContent = connectedCount;
             
             // Update participants list
             const participantsList = document.getElementById('participantsList');
@@ -1354,11 +1451,12 @@
             
             currentLobby.participants.forEach((participant, index) => {
                 const div = document.createElement('div');
-                div.className = `participant ${participant.isHost ? 'host' : ''}`;
+                div.className = `participant ${participant.isHost ? 'host' : ''} ${participant.connected === false ? 'disconnected' : ''}`;
                 div.style.animationDelay = `${index * 0.1}s`;
                 div.innerHTML = `
                     ${participant.isHost ? '👑' : '👤'} ${participant.username} 
                     ${participant.isHost ? '<span style="font-size: 0.8em; color: #ffc107;">(Host)</span>' : ''}
+                    ${participant.connected === false ? '<span style="font-size: 0.8em; color: #dc3545;">(Disconnected)</span>' : ''}
                 `;
                 participantsList.appendChild(div);
             });
@@ -1366,10 +1464,10 @@
             // Show/hide start button
             document.getElementById('startBtn').style.display = isHost ? 'inline-block' : 'none';
             
-            // Enable start button only if enough players
+            // Enable start button only if enough connected players
             if (isHost) {
                 const startBtn = document.getElementById('startBtn');
-                startBtn.disabled = currentLobby.participants.length < 2;
+                startBtn.disabled = connectedCount < 2;
             }
         }
 
@@ -1779,6 +1877,21 @@
                 socket.emit('leave-lobby', { code: currentLobby.code, username: currentUsername });
             }
         });
+
+        // Prevent page reload on mobile when swiping
+        let touchStartY = 0;
+        document.addEventListener('touchstart', (e) => {
+            touchStartY = e.touches[0].clientY;
+        }, { passive: true });
+
+        document.addEventListener('touchmove', (e) => {
+            const touchY = e.touches[0].clientY;
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            
+            if (scrollTop === 0 && touchY > touchStartY) {
+                e.preventDefault();
+            }
+        }, { passive: false });
     </script>
 </body>
 </html>
