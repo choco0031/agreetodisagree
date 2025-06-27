@@ -426,7 +426,7 @@ function startVotingPhase(code) {
     
     gameState.phase = 'voting';
     gameState.votes = {};
-    gameState.timer = 20;
+    gameState.timer = 30;
     
     // Clear any existing timer
     if (gameState.timerInterval) {
@@ -439,7 +439,7 @@ function startVotingPhase(code) {
         roundNumber: gameState.roundNumber
     });
     
-    startTimer(code, 20, () => {
+    startTimer(code, 30, () => {
         processVoteResults(code);
     });
 }
@@ -478,7 +478,7 @@ function startSoloPhase(code) {
     if (!gameState || !lobby) return;
     
     gameState.phase = 'solo';
-    gameState.timer = 60;
+    gameState.timer = 15; //15 seconds (testing)
     
     // Only select from connected players who were present at game start
     const gameStartParticipants = Object.keys(gameState.scores);
@@ -530,11 +530,11 @@ function startDiscussionPhase(code) {
     if (!gameState) return;
     
     gameState.phase = 'discussion';
-    gameState.timer = 180; // 3 minutes
+    gameState.timer = 20; //20Seconds (testing)
     
     io.to(code).emit('game-phase-update', { phase: 'discussion' });
     
-    startTimer(code, 180, () => {
+    startTimer(code, 20, () => {
         startRevotingPhase(code);
     });
 }
@@ -546,11 +546,11 @@ function startRevotingPhase(code) {
     
     gameState.phase = 'revoting';
     gameState.revotes = {};
-    gameState.timer = 20;
+    gameState.timer = 30;
     
     io.to(code).emit('game-phase-update', { phase: 'revoting' });
     
-    startTimer(code, 20, () => {
+    startTimer(code, 30, () => {
         calculateResults(code);
     });
 }
