@@ -6,15 +6,26 @@ const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server);
+const io = socketIo(server, {
+    // Mobile optimization settings
+    pingTimeout: 60000,
+    pingInterval: 25000,
+    transports: ['websocket', 'polling'],
+    allowEIO3: true,
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
+    }
+});
 
 // Middleware
 app.use(express.json());
-app.use(express.static('public')); // Serve your HTML file from public folder
+app.use(express.static('public'));
 
 // Game state storage
 const lobbies = new Map();
 const gameStates = new Map();
+const disconnectedPlayers = new Map(); // Track disconnected players for reconnection
 
 // Load topics from file
 let debateTopics = [];
@@ -24,7 +35,6 @@ try {
     console.log(`Loaded ${debateTopics.length} debate topics`);
 } catch (error) {
     console.error('Error loading topics.txt:', error);
-    // Fallback topics if file doesn't exist
     debateTopics = [
         "Social media has done more harm than good to society",
         "Remote work is more productive than office work",
@@ -44,6 +54,35 @@ function generateLobbyCode() {
     return Math.random().toString(36).substr(2, 6).toUpperCase();
 }
 
+// Helper function to sync game state to a player
+function syncGameStateToPlayer(socketId, code) {
+    const gameState = gameStates.get(code);
+    const lobby = lobbies.get(code);
+    
+    if (!gameState || !lobby) return;
+    
+    const socket = io.sockets.sockets.get(socketId);
+    if (!socket) return;
+    
+    // Send current game state
+    socket.emit('sync-game-state', {
+        gameState: {
+            phase: gameState.phase,
+            roundNumber: gameState.roundNumber,
+            currentTopic: gameState.currentTopic,
+            timer: gameState.timer,
+            scores: gameState.scores,
+            initialVoteResults: gameState.initialVoteResults,
+            finalVoteResults: gameState.finalVoteResults,
+            currentSpeaker: gameState.currentSpeaker,
+            speakerPosition: gameState.speakerPosition
+        },
+        lobby: lobby,
+        userVote: gameState.votes[socket.username],
+        userRevote: gameState.revotes[socket.username]
+    });
+}
+
 // API Routes
 app.post('/api/lobby/create', (req, res) => {
     const { username } = req.body;
@@ -56,8 +95,9 @@ app.post('/api/lobby/create', (req, res) => {
     const lobby = {
         code,
         host: username,
-        participants: [{ username, isHost: true }],
-        createdAt: new Date()
+        participants: [{ username, isHost: true, connected: true }],
+        createdAt: new Date(),
+        gameStarted: false
     };
     
     lobbies.set(code, lobby);
@@ -77,18 +117,27 @@ app.post('/api/lobby/join', (req, res) => {
         return res.status(404).json({ error: 'Lobby not found' });
     }
     
-    // ADD THIS CHECK - Prevent joining if game is active
+    // Check if this is a reconnection
+    const existingParticipant = lobby.participants.find(p => p.username === username);
+    if (existingParticipant) {
+        // Allow reconnection
+        existingParticipant.connected = true;
+        return res.json({ lobby, reconnection: true });
+    }
+    
+    // Add new participant
+    lobby.participants.push({ username, isHost: false, connected: true });
+    
+    // If game is active, initialize score for new player
     const gameState = gameStates.get(code);
-    if (gameState && gameState.phase !== 'waiting') {
-        return res.status(400).json({ error: 'Cannot join - game is already in progress' });
+    if (gameState) {
+        gameState.scores[username] = 0;
+        
+        // If in voting or revoting phase, allow immediate participation
+        if (gameState.phase === 'voting' || gameState.phase === 'revoting') {
+            // New player can vote immediately
+        }
     }
-    
-    // Check if username already exists
-    if (lobby.participants.some(p => p.username === username)) {
-        return res.status(400).json({ error: 'Username already taken in this lobby' });
-    }
-    
-    lobby.participants.push({ username, isHost: false });
     
     res.json({ lobby });
 });
@@ -105,24 +154,59 @@ io.on('connection', (socket) => {
         
         const lobby = lobbies.get(code);
         if (lobby) {
+            // Update connection status
+            const participant = lobby.participants.find(p => p.username === username);
+            if (participant) {
+                participant.connected = true;
+            }
+            
+            // Check if this is a reconnection during a game
+            const gameState = gameStates.get(code);
+            if (gameState && gameState.phase !== 'waiting') {
+                // Sync current game state to reconnected player
+                setTimeout(() => {
+                    syncGameStateToPlayer(socket.id, code);
+                }, 1000);
+            }
+            
             io.to(code).emit('lobby-updated', lobby);
+            
+            // Welcome message for late joiners
+            if (gameState && !participant) {
+                socket.emit('late-join-welcome', {
+                    roundNumber: gameState.roundNumber,
+                    currentPhase: gameState.phase,
+                    currentTopic: gameState.currentTopic
+                });
+            }
         }
     });
     
     socket.on('leave-lobby', (data) => {
         const { code, username } = data;
         const lobby = lobbies.get(code);
+        const gameState = gameStates.get(code);
         
         if (lobby) {
-            lobby.participants = lobby.participants.filter(p => p.username !== username);
-            
-            if (lobby.participants.length === 0 || username === lobby.host) {
-                // Close lobby if empty or host leaves
-                lobbies.delete(code);
-                gameStates.delete(code);
-                io.to(code).emit('lobby-closed');
-            } else {
+            // If game is active, just mark as disconnected instead of removing
+            if (gameState && gameState.phase !== 'waiting') {
+                const participant = lobby.participants.find(p => p.username === username);
+                if (participant) {
+                    participant.connected = false;
+                    disconnectedPlayers.set(username, { code, timestamp: Date.now() });
+                }
                 io.to(code).emit('lobby-updated', lobby);
+            } else {
+                // Remove from lobby if game hasn't started
+                lobby.participants = lobby.participants.filter(p => p.username !== username);
+                
+                if (lobby.participants.length === 0 || username === lobby.host) {
+                    lobbies.delete(code);
+                    gameStates.delete(code);
+                    io.to(code).emit('lobby-closed');
+                } else {
+                    io.to(code).emit('lobby-updated', lobby);
+                }
             }
         }
         
@@ -134,6 +218,8 @@ io.on('connection', (socket) => {
         const lobby = lobbies.get(code);
         
         if (lobby && lobby.host === username && lobby.participants.length >= 2) {
+            lobby.gameStarted = true;
+            
             // Initialize game state
             const gameState = {
                 phase: 'voting',
@@ -147,7 +233,9 @@ io.on('connection', (socket) => {
                 timer: 20,
                 timerInterval: null,
                 initialVoteResults: { agree: 0, disagree: 0, abstain: 0 },
-                finalVoteResults: { agree: 0, disagree: 0, abstain: 0 }
+                finalVoteResults: { agree: 0, disagree: 0, abstain: 0 },
+                currentSpeaker: null,
+                speakerPosition: null
             };
             
             // Initialize scores
@@ -174,10 +262,13 @@ io.on('connection', (socket) => {
         if (gameState && gameState.phase === 'voting') {
             gameState.votes[username] = vote;
             
-            // Check if all players have voted
+            // Check if all connected players have voted
             const lobby = lobbies.get(code);
-            if (lobby && Object.keys(gameState.votes).length === lobby.participants.length) {
-                // All voted, move to next phase faster
+            const connectedPlayers = lobby.participants.filter(p => p.connected);
+            const votedPlayers = Object.keys(gameState.votes);
+            
+            if (votedPlayers.length >= connectedPlayers.length) {
+                // All connected players voted, move to next phase
                 if (gameState.timerInterval) {
                     clearInterval(gameState.timerInterval);
                 }
@@ -195,10 +286,13 @@ io.on('connection', (socket) => {
         if (gameState && gameState.phase === 'revoting') {
             gameState.revotes[username] = vote;
             
-            // Check if all players have revoted
+            // Check if all connected players have revoted
             const lobby = lobbies.get(code);
-            if (lobby && Object.keys(gameState.revotes).length === lobby.participants.length) {
-                // All revoted, move to results faster
+            const connectedPlayers = lobby.participants.filter(p => p.connected);
+            const revotedPlayers = Object.keys(gameState.revotes);
+            
+            if (revotedPlayers.length >= connectedPlayers.length) {
+                // All connected players revoted, move to results
                 if (gameState.timerInterval) {
                     clearInterval(gameState.timerInterval);
                 }
@@ -207,6 +301,11 @@ io.on('connection', (socket) => {
                 }, 1000);
             }
         }
+    });
+    
+    socket.on('request-sync', (data) => {
+        const { code } = data;
+        syncGameStateToPlayer(socket.id, code);
     });
     
     socket.on('restart-game', (data) => {
@@ -226,6 +325,8 @@ io.on('connection', (socket) => {
             gameState.timer = 20;
             gameState.initialVoteResults = { agree: 0, disagree: 0, abstain: 0 };
             gameState.finalVoteResults = { agree: 0, disagree: 0, abstain: 0 };
+            gameState.currentSpeaker = null;
+            gameState.speakerPosition = null;
             
             // Reset scores
             lobby.participants.forEach(participant => {
@@ -250,27 +351,58 @@ io.on('connection', (socket) => {
         
         if (socket.lobbyCode && socket.username) {
             const lobby = lobbies.get(socket.lobbyCode);
+            const gameState = gameStates.get(socket.lobbyCode);
             
             if (lobby) {
-                lobby.participants = lobby.participants.filter(p => p.username !== socket.username);
+                const participant = lobby.participants.find(p => p.username === socket.username);
                 
-                if (lobby.participants.length === 0 || socket.username === lobby.host) {
-                    // Clean up game state
-                    const gameState = gameStates.get(socket.lobbyCode);
-                    if (gameState && gameState.timerInterval) {
-                        clearInterval(gameState.timerInterval);
+                if (participant) {
+                    // Mark as disconnected if game is active
+                    if (gameState && gameState.phase !== 'waiting') {
+                        participant.connected = false;
+                        disconnectedPlayers.set(socket.username, { 
+                            code: socket.lobbyCode, 
+                            timestamp: Date.now() 
+                        });
+                        io.to(socket.lobbyCode).emit('lobby-updated', lobby);
+                    } else {
+                        // Remove if game hasn't started
+                        lobby.participants = lobby.participants.filter(p => p.username !== socket.username);
+                        
+                        if (lobby.participants.length === 0 || socket.username === lobby.host) {
+                            if (gameState && gameState.timerInterval) {
+                                clearInterval(gameState.timerInterval);
+                            }
+                            
+                            lobbies.delete(socket.lobbyCode);
+                            gameStates.delete(socket.lobbyCode);
+                            io.to(socket.lobbyCode).emit('lobby-closed');
+                        } else {
+                            io.to(socket.lobbyCode).emit('lobby-updated', lobby);
+                        }
                     }
-                    
-                    lobbies.delete(socket.lobbyCode);
-                    gameStates.delete(socket.lobbyCode);
-                    io.to(socket.lobbyCode).emit('lobby-closed');
-                } else {
-                    io.to(socket.lobbyCode).emit('lobby-updated', lobby);
                 }
             }
         }
     });
 });
+
+// Clean up old disconnected players periodically
+setInterval(() => {
+    const now = Date.now();
+    const timeout = 5 * 60 * 1000; // 5 minutes
+    
+    disconnectedPlayers.forEach((data, username) => {
+        if (now - data.timestamp > timeout) {
+            const lobby = lobbies.get(data.code);
+            if (lobby) {
+                lobby.participants = lobby.participants.filter(p => p.username !== username);
+                io.to(data.code).emit('lobby-updated', lobby);
+            }
+            disconnectedPlayers.delete(username);
+        }
+    });
+}, 60000); // Check every minute
 
 // Game logic functions
 function startVotingPhase(code) {
@@ -318,12 +450,14 @@ function processVoteResults(code) {
     
     if (!gameState || !lobby) return;
     
-    // Count votes
+    // Count votes (only from connected players)
     const voteResults = { agree: 0, disagree: 0, abstain: 0 };
     
     lobby.participants.forEach(participant => {
-        const vote = gameState.votes[participant.username] || 'abstain';
-        voteResults[vote]++;
+        if (participant.connected) {
+            const vote = gameState.votes[participant.username] || 'abstain';
+            voteResults[vote]++;
+        }
     });
     
     gameState.initialVoteResults = { ...voteResults };
@@ -344,23 +478,36 @@ function startSoloPhase(code) {
     if (!gameState || !lobby) return;
     
     gameState.phase = 'solo';
-    gameState.timer = 60; // 1 minute (your change)
+    gameState.timer = 60;
     
-    // CHANGE THIS PART - Only select from players who were present at game start
-    const gameStartParticipants = Object.keys(gameState.scores); // Players who have scores = were present at start
-    const availableSpeakers = gameStartParticipants.filter(username => !gameState.usedSpeakers.includes(username));
+    // Only select from connected players who were present at game start
+    const gameStartParticipants = Object.keys(gameState.scores);
+    const connectedPlayers = lobby.participants.filter(p => p.connected).map(p => p.username);
+    const availableSpeakers = gameStartParticipants
+        .filter(username => connectedPlayers.includes(username))
+        .filter(username => !gameState.usedSpeakers.includes(username));
     
     if (availableSpeakers.length === 0) {
-        // Reset speakers if all have spoken (only from original players)
+        // Reset speakers if all have spoken
         gameState.usedSpeakers = [];
     }
     
-    const speakers = availableSpeakers.length > 0 ? availableSpeakers : gameStartParticipants;
+    const speakers = availableSpeakers.length > 0 ? availableSpeakers : 
+                    gameStartParticipants.filter(username => connectedPlayers.includes(username));
+    
+    if (speakers.length === 0) {
+        // No connected players, skip to discussion
+        startDiscussionPhase(code);
+        return;
+    }
+    
     const selectedSpeaker = speakers[Math.floor(Math.random() * speakers.length)];
     gameState.usedSpeakers.push(selectedSpeaker);
+    gameState.currentSpeaker = selectedSpeaker;
     
     // Get speaker's vote position
     const speakerVote = gameState.votes[selectedSpeaker] || 'abstain';
+    gameState.speakerPosition = speakerVote;
     
     io.to(code).emit('game-phase-update', {
         phase: 'solo',
@@ -383,11 +530,11 @@ function startDiscussionPhase(code) {
     if (!gameState) return;
     
     gameState.phase = 'discussion';
-    gameState.timer = 300; // 3 minutes
+    gameState.timer = 180; // 3 minutes
     
     io.to(code).emit('game-phase-update', { phase: 'discussion' });
     
-    startTimer(code, 300, () => {
+    startTimer(code, 180, () => {
         startRevotingPhase(code);
     });
 }
@@ -414,59 +561,42 @@ function calculateResults(code) {
     
     if (!gameState || !lobby) return;
     
-    // Count final votes
+    // Count final votes (only from connected players)
     const finalVoteResults = { agree: 0, disagree: 0, abstain: 0 };
     
     lobby.participants.forEach(participant => {
-        const vote = gameState.revotes[participant.username] || 'abstain';
-        finalVoteResults[vote]++;
+        if (participant.connected) {
+            const vote = gameState.revotes[participant.username] || 'abstain';
+            finalVoteResults[vote]++;
+        }
     });
     
     gameState.finalVoteResults = { ...finalVoteResults };
     
-    // NEW SCORING LOGIC
-    // Calculate vote changes for each team
+    // Calculate vote changes
     const agreeChange = finalVoteResults.agree - gameState.initialVoteResults.agree;
     const disagreeChange = finalVoteResults.disagree - gameState.initialVoteResults.disagree;
     
-    console.log(`Vote changes - Agree: ${agreeChange}, Disagree: ${disagreeChange}`);
-    
-    // Determine winning team and points
-    let winningTeam = '';
-    let winningPlayers = [];
-    let pointsAwarded = 0;
-    
+    // Determine winning team
+    let winningTeam = [];
     if (agreeChange > disagreeChange) {
-        // Agree team wins
-        winningTeam = 'agree';
-        pointsAwarded = agreeChange - disagreeChange; // Difference between the two changes
-        winningPlayers = lobby.participants
-            .filter(p => gameState.revotes[p.username] === 'agree')
-            .map(p => p.username);
+        winningTeam = ['agree'];
     } else if (disagreeChange > agreeChange) {
-        // Disagree team wins
-        winningTeam = 'disagree';
-        pointsAwarded = disagreeChange - agreeChange; // Difference between the two changes
-        winningPlayers = lobby.participants
-            .filter(p => gameState.revotes[p.username] === 'disagree')
-            .map(p => p.username);
-    } else {
-        // Tie - no points awarded
-        pointsAwarded = 0;
+        winningTeam = ['disagree'];
     }
     
-    console.log(`Winning team: ${winningTeam}, Points awarded: ${pointsAwarded}, Winners: ${winningPlayers}`);
-    
-    // Award points to winning team members
-    if (winningPlayers.length > 0 && pointsAwarded > 0) {
-        winningPlayers.forEach(username => {
-            gameState.scores[username] += pointsAwarded;
+    // Award points (3 points to each winning team member)
+    if (winningTeam.length > 0) {
+        lobby.participants.forEach(participant => {
+            if (gameState.revotes[participant.username] === winningTeam[0]) {
+                gameState.scores[participant.username] += 3;
+            }
         });
     }
     
-    // Penalize players who didn't vote in final round
+    // Penalize connected players who didn't vote
     lobby.participants.forEach(participant => {
-        if (!gameState.revotes[participant.username]) {
+        if (participant.connected && !gameState.revotes[participant.username]) {
             gameState.scores[participant.username] -= 1;
         }
     });
@@ -477,8 +607,7 @@ function calculateResults(code) {
     io.to(code).emit('round-results', {
         initialVotes: gameState.initialVoteResults,
         finalVotes: finalVoteResults,
-        winningTeam: winningPlayers,
-        pointsAwarded,
+        winningTeam: winningTeam,
         agreeChange,
         disagreeChange
     });
