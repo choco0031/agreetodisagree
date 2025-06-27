@@ -759,6 +759,40 @@
             margin-top: 2px;
         }
 
+        .round-skipped {
+            background: linear-gradient(45deg, #ffebee, #f8f9fa);
+            border: 2px solid #ff5252;
+            border-radius: 15px;
+            padding: 30px;
+            margin: 20px 0;
+            text-align: center;
+            animation: bounceIn 0.8s ease;
+        }
+
+        .round-skipped h3 {
+            color: #c62828;
+            font-size: 24px;
+            margin-bottom: 15px;
+        }
+
+        .skip-reason {
+            font-size: 18px;
+            color: #d32f2f;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .skip-message {
+            font-size: 16px;
+            color: #666;
+        }
+
+        @keyframes bounceIn {
+            0% { transform: scale(0.5); opacity: 0; }
+            60% { transform: scale(1.1); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
         /* Responsive Design */
         @media (max-width: 768px) {
             .container {
@@ -926,6 +960,13 @@
             <div id="scoreList" class="score-list"></div>
         </div>
 
+        <!-- Round Skipped -->
+        <div id="roundSkipped" class="round-skipped hidden">
+            <h3>⏭️ Round Skipped</h3>
+            <div class="skip-reason">No one had a strong opinion on this topic!</div>
+            <div class="skip-message">Moving to the next round with no score changes...</div>
+        </div>
+
         <!-- Waiting for next round -->
         <div id="waitingForNext" class="waiting-next hidden">
             <div class="waiting-message">
@@ -1083,6 +1124,17 @@
         const joinCodeInput = document.getElementById('joinCode');
         const createBtn = document.getElementById('createBtn');
         const joinBtn = document.getElementById('joinBtn');
+
+        socket.on('round-skipped', (data) => {
+            console.log('Round skipped:', data);
+            hideAllGameSections();
+            document.getElementById('roundSkipped').classList.remove('hidden');
+            
+            // Optionally show the vote breakdown
+            if (data.finalVotes) {
+                showSuccess(data.message);
+            }
+        });
 
         // Socket event listeners
         socket.on('connect', () => {
@@ -1492,6 +1544,9 @@
                 case 'revoting':
                     showRevotingPhase();
                     break;
+                case 'round-skipped':
+                    showRoundSkipped();
+                    break;
                 case 'round-results':
                     showRoundResults();
                     break;
@@ -1508,7 +1563,7 @@
             const sections = [
                 'timerContainer', 'votingInterface', 'voteResults',
                 'soloOpinionStage', 'groupDiscussion', 'revoteInterface', 'finalResults',
-                'scoreboard', 'waitingForNext', 'gameEndScreen'
+                'scoreboard', 'waitingForNext', 'gameEndScreen', 'roundSkipped'
             ];
             
             sections.forEach(id => {
@@ -1561,6 +1616,10 @@
             
             // Enable revote buttons
             enableRevoteButtons();
+        }
+
+        function showRoundSkipped() {
+            document.getElementById('roundSkipped').classList.remove('hidden');
         }
 
         function showRoundResults() {
