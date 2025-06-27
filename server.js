@@ -426,7 +426,7 @@ function startVotingPhase(code) {
     
     gameState.phase = 'voting';
     gameState.votes = {};
-    gameState.timer = 30;
+    gameState.timer = 20;
     
     // Clear any existing timer
     if (gameState.timerInterval) {
@@ -439,7 +439,7 @@ function startVotingPhase(code) {
         roundNumber: gameState.roundNumber
     });
     
-    startTimer(code, 30, () => {
+    startTimer(code, 20, () => {
         processVoteResults(code);
     });
 }
@@ -478,7 +478,7 @@ function startSoloPhase(code) {
     if (!gameState || !lobby) return;
     
     gameState.phase = 'solo';
-    gameState.timer = 15; //15 seconds (testing)
+    gameState.timer = 60;
     
     // Only select from connected players who were present at game start
     const gameStartParticipants = Object.keys(gameState.scores);
@@ -530,11 +530,11 @@ function startDiscussionPhase(code) {
     if (!gameState) return;
     
     gameState.phase = 'discussion';
-    gameState.timer = 20; //20Seconds (testing)
+    gameState.timer = 180; // 3 minutes
     
     io.to(code).emit('game-phase-update', { phase: 'discussion' });
     
-    startTimer(code, 20, () => {
+    startTimer(code, 180, () => {
         startRevotingPhase(code);
     });
 }
@@ -546,11 +546,11 @@ function startRevotingPhase(code) {
     
     gameState.phase = 'revoting';
     gameState.revotes = {};
-    gameState.timer = 30;
+    gameState.timer = 20;
     
     io.to(code).emit('game-phase-update', { phase: 'revoting' });
     
-    startTimer(code, 30, () => {
+    startTimer(code, 20, () => {
         calculateResults(code);
     });
 }
@@ -572,6 +572,26 @@ function calculateResults(code) {
     });
     
     gameState.finalVoteResults = { ...finalVoteResults };
+    
+    // Check if either agree OR disagree has 0 votes
+    if (finalVoteResults.agree === 0 || finalVoteResults.disagree === 0) {
+        // Skip the round - no points awarded, no penalties
+        gameState.phase = 'round-skipped';
+        
+        io.to(code).emit('game-phase-update', { phase: 'round-skipped' });
+        io.to(code).emit('round-skipped', {
+            message: 'Round skipped - unanimous decision!',
+            initialVotes: gameState.initialVoteResults,
+            finalVotes: finalVoteResults
+        });
+        
+        // No penalties for not voting in a skipped round
+        
+        setTimeout(() => {
+            showScoreboard(code);
+        }, 5000);
+        return;
+    }
     
     // Calculate vote changes
     const agreeChange = finalVoteResults.agree - gameState.initialVoteResults.agree;
