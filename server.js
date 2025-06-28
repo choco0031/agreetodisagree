@@ -504,28 +504,37 @@ function startSoloPhase(code) {
     gameState.phase = 'solo';
     gameState.timer = 60;
     
-    // Only select from connected players who were present at game start
+    // Get connected players who were present at game start
     const gameStartParticipants = Object.keys(gameState.scores);
     const connectedPlayers = lobby.participants.filter(p => p.connected).map(p => p.username);
-    const availableSpeakers = gameStartParticipants
+    
+    // Filter to only players who voted agree or disagree (have an opinion)
+    const playersWithOpinion = gameStartParticipants
         .filter(username => connectedPlayers.includes(username))
+        .filter(username => {
+            const vote = gameState.votes[username];
+            return vote === 'agree' || vote === 'disagree';
+        });
+    
+    // First try to select from players with opinions who haven't spoken
+    let availableSpeakers = playersWithOpinion
         .filter(username => !gameState.usedSpeakers.includes(username));
     
-    if (availableSpeakers.length === 0) {
-        // Reset speakers if all have spoken
+    // If all opinion holders have spoken, reset the speaker list but still only use opinion holders
+    if (availableSpeakers.length === 0 && playersWithOpinion.length > 0) {
+        // Reset speakers list
         gameState.usedSpeakers = [];
+        availableSpeakers = playersWithOpinion;
     }
     
-    const speakers = availableSpeakers.length > 0 ? availableSpeakers : 
-                    gameStartParticipants.filter(username => connectedPlayers.includes(username));
-    
-    if (speakers.length === 0) {
-        // No connected players, skip to discussion
+    // If no one has an opinion (everyone voted abstain), skip to discussion
+    if (availableSpeakers.length === 0) {
+        console.log('No players with opinions available for solo phase, skipping to discussion');
         startDiscussionPhase(code);
         return;
     }
     
-    const selectedSpeaker = speakers[Math.floor(Math.random() * speakers.length)];
+    const selectedSpeaker = availableSpeakers[Math.floor(Math.random() * availableSpeakers.length)];
     gameState.usedSpeakers.push(selectedSpeaker);
     gameState.currentSpeaker = selectedSpeaker;
     
@@ -554,11 +563,11 @@ function startDiscussionPhase(code) {
     if (!gameState) return;
     
     gameState.phase = 'discussion';
-    gameState.timer = 300; // 5 minutes
+    gameState.timer = 240; // 4 minutes
     
     io.to(code).emit('game-phase-update', { phase: 'discussion' });
     
-    startTimer(code, 300, () => {
+    startTimer(code, 240, () => {
         startRevotingPhase(code);
     });
 }
