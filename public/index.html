@@ -978,7 +978,6 @@
         <div id="gameEndScreen" class="final-results hidden">
             <h3>🎉 Game Complete!</h3>
             <div id="finalScores" class="score-list"></div>
-            <button class="btn" onclick="restartGame()">🔄 Play Again</button>
         </div>
 
         <button class="btn back-btn" onclick="leaveGame()" id="leaveGameBtn">🚪 Leave Game</button>
@@ -1002,27 +1001,32 @@
                 <h3>🎯 Game Flow</h3>
                 <ul>
                     <li><strong>1. Topic Selection:</strong> A controversial topic is randomly chosen</li>
-                    <li><strong>2. Initial Vote (20s):</strong> Everyone votes Agree/Disagree/No Opinion</li>
-                    <li><strong>3. Solo Opinion (1min):</strong> One random player shares their perspective</li>
-                    <li><strong>4. Group Discussion (3min):</strong> Open discussion for all players</li>
-                    <li><strong>5. Final Vote (20s):</strong> Everyone votes again after discussion</li>
-                    <li><strong>6. Scoring:</strong> Points awarded based on vote changes</li>
+                    <li><strong>2. Initial Vote (30s):</strong> Everyone votes Agree/Disagree/No Opinion</li>
+                    <li><strong>3. Round Skip Check:</strong> If everyone votes the same way, round is skipped</li>
+                    <li><strong>4. Solo Opinion (1min):</strong> One random player shares their perspective</li>
+                    <li><strong>5. Group Discussion (5min):</strong> Open discussion for all players</li>
+                    <li><strong>6. Final Vote (30s):</strong> Everyone votes again after discussion</li>
+                    <li><strong>7. Scoring:</strong> Points awarded based on vote changes</li>
                 </ul>
 
                 <h3>🏆 Scoring System</h3>
                 <ul>
-                    <li><strong>Winning Team:</strong> The side (Agree/Disagree) that gains the most votes gets +3 points each</li>
+                    <li><strong>Winning Team:</strong> The side (Agree/Disagree) that gains the most votes wins</li>
+                    <li><strong>Points Awarded:</strong> Winners get points equal to votes gained by their side</li>
+                    <li><strong>Example:</strong> If Disagree gains +3 votes and wins, each Disagree voter gets +3 points</li>
+                    <li><strong>Tie:</strong> If both sides gain equal votes, no points awarded</li>
                     <li><strong>No Vote Penalty:</strong> Players who don't vote in the final round lose 1 point</li>
                     <li><strong>Late Joiners:</strong> Start with 0 points but can participate immediately</li>
-                    <li><strong>Multiple Rounds:</strong> Game continues until all topics are used</li>
                 </ul>
 
                 <h3>🔧 Rules</h3>
                 <ul>
+                    <li><strong>Round Skip:</strong> If all players agree OR all disagree in initial vote, round is skipped</li>
                     <li><strong>No Repeats:</strong> Topics and solo speakers are never repeated</li>
                     <li><strong>Fair Rotation:</strong> Everyone gets a chance to be the solo speaker</li>
-                    <li><strong>Time Limits:</strong> All phases have strict time limits</li>
+                    <li><strong>Join Anytime:</strong> New players can join at any point during the game</li>
                     <li><strong>Mobile Friendly:</strong> Game works seamlessly on mobile devices</li>
+                    <li><strong>Disconnection Grace:</strong> Players can reconnect if they lose connection</li>
                 </ul>
             </div>
         </div>
