@@ -230,7 +230,7 @@ io.on('connection', (socket) => {
                 scores: {},
                 usedTopics: [],
                 usedSpeakers: [],
-                timer: 20,
+                timer: 30,
                 timerInterval: null,
                 initialVoteResults: { agree: 0, disagree: 0, abstain: 0 },
                 finalVoteResults: { agree: 0, disagree: 0, abstain: 0 },
@@ -322,7 +322,7 @@ io.on('connection', (socket) => {
             gameState.revotes = {};
             gameState.usedTopics = [];
             gameState.usedSpeakers = [];
-            gameState.timer = 20;
+            gameState.timer = 30;
             gameState.initialVoteResults = { agree: 0, disagree: 0, abstain: 0 };
             gameState.finalVoteResults = { agree: 0, disagree: 0, abstain: 0 };
             gameState.currentSpeaker = null;
@@ -426,7 +426,7 @@ function startVotingPhase(code) {
     
     gameState.phase = 'voting';
     gameState.votes = {};
-    gameState.timer = 20;
+    gameState.timer = 30;
     
     // Clear any existing timer
     if (gameState.timerInterval) {
@@ -439,7 +439,7 @@ function startVotingPhase(code) {
         roundNumber: gameState.roundNumber
     });
     
-    startTimer(code, 20, () => {
+    startTimer(code, 30, () => {
         processVoteResults(code);
     });
 }
@@ -554,11 +554,11 @@ function startDiscussionPhase(code) {
     if (!gameState) return;
     
     gameState.phase = 'discussion';
-    gameState.timer = 180; // 3 minutes
+    gameState.timer = 300; // 5 minutes
     
     io.to(code).emit('game-phase-update', { phase: 'discussion' });
     
-    startTimer(code, 180, () => {
+    startTimer(code, 300, () => {
         startRevotingPhase(code);
     });
 }
@@ -570,11 +570,11 @@ function startRevotingPhase(code) {
     
     gameState.phase = 'revoting';
     gameState.revotes = {};
-    gameState.timer = 20;
+    gameState.timer = 30;
     
     io.to(code).emit('game-phase-update', { phase: 'revoting' });
     
-    startTimer(code, 20, () => {
+    startTimer(code, 30, () => {
         calculateResults(code);
     });
 }
