@@ -601,19 +601,30 @@ function calculateResults(code) {
     const agreeChange = finalVoteResults.agree - gameState.initialVoteResults.agree;
     const disagreeChange = finalVoteResults.disagree - gameState.initialVoteResults.disagree;
     
-    // Determine winning team
-    let winningTeam = [];
-    if (agreeChange > disagreeChange) {
-        winningTeam = ['agree'];
-    } else if (disagreeChange > agreeChange) {
-        winningTeam = ['disagree'];
-    }
+    console.log(`Vote changes - Agree: ${agreeChange}, Disagree: ${disagreeChange}`);
     
-    // Award points (3 points to each winning team member)
-    if (winningTeam.length > 0) {
+    // Determine winning team based on which side gained more votes
+    let winningTeam = [];
+    let pointsPerWinner = 0;
+    
+    if (agreeChange > disagreeChange) {
+        // Agree team wins
+        winningTeam = ['agree'];
+        pointsPerWinner = agreeChange; // Points = number of votes gained
+    } else if (disagreeChange > agreeChange) {
+        // Disagree team wins
+        winningTeam = ['disagree'];
+        pointsPerWinner = disagreeChange; // Points = number of votes gained
+    }
+    // If agreeChange === disagreeChange, no one wins (including if both are 0)
+    
+    console.log(`Winning team: ${winningTeam}, Points per winner: ${pointsPerWinner}`);
+    
+    // Award points to winning team members
+    if (winningTeam.length > 0 && pointsPerWinner > 0) {
         lobby.participants.forEach(participant => {
             if (gameState.revotes[participant.username] === winningTeam[0]) {
-                gameState.scores[participant.username] += 3;
+                gameState.scores[participant.username] += pointsPerWinner;
             }
         });
     }
@@ -632,6 +643,7 @@ function calculateResults(code) {
         initialVotes: gameState.initialVoteResults,
         finalVotes: finalVoteResults,
         winningTeam: winningTeam,
+        pointsPerWinner: pointsPerWinner,
         agreeChange,
         disagreeChange
     });
