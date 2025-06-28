@@ -1753,8 +1753,8 @@
                 </div>
                 <div class="vote-comparison">
                     <div class="comparison-title">Final Votes</div>
-                    <div>✅ Agree: ${data.finalVotes.agree}</div>
-                    <div>❌ Disagree: ${data.finalVotes.disagree}</div>
+                    <div>✅ Agree: ${data.finalVotes.agree} ${data.agreeChange >= 0 ? `(+${data.agreeChange})` : `(${data.agreeChange})`}</div>
+                    <div>❌ Disagree: ${data.finalVotes.disagree} ${data.disagreeChange >= 0 ? `(+${data.disagreeChange})` : `(${data.disagreeChange})`}</div>
                     <div>🤷 No Opinion: ${data.finalVotes.abstain}</div>
                 </div>
             `;
@@ -1763,15 +1763,16 @@
             const roundWinner = document.getElementById('roundWinner');
             if (data.winningTeam.length > 0) {
                 const team = data.winningTeam[0] === 'agree' ? 'Agree' : 'Disagree';
-                roundWinner.innerHTML = `🏆 Round Winner: <strong>${team} Team</strong>`;
+                const voteGain = data.winningTeam[0] === 'agree' ? data.agreeChange : data.disagreeChange;
+                roundWinner.innerHTML = `🏆 Round Winner: <strong>${team} Team</strong> (+${voteGain} votes)`;
             } else {
                 roundWinner.innerHTML = `🤝 Round Result: <strong>Tie - No Points Awarded</strong>`;
             }
             
             // Display points
             const pointsAwarded = document.getElementById('pointsAwarded');
-            if (data.winningTeam.length > 0) {
-                pointsAwarded.innerHTML = `📈 Each winning team member earned <strong>+3 points</strong>`;
+            if (data.winningTeam.length > 0 && data.pointsPerWinner > 0) {
+                pointsAwarded.innerHTML = `📈 Each ${data.winningTeam[0]} team member earned <strong>+${data.pointsPerWinner} points</strong>`;
             } else {
                 pointsAwarded.innerHTML = `📊 No points awarded this round`;
             }
