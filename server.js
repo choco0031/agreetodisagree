@@ -676,7 +676,7 @@ function showScoreboard(code) {
         gameState.roundNumber++;
         
         // Check if we should continue or end game
-        if (gameState.roundNumber > 5 || gameState.usedTopics.length >= debateTopics.length) {
+        if (gameState.roundNumber > 10 || gameState.usedTopics.length >= debateTopics.length) {
             endGame(code);
         } else {
             gameState.phase = 'waiting';
